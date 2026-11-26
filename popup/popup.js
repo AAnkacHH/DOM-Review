@@ -101,46 +101,12 @@ Instructions:
 - Provide code changes with explanations.`
   };
 
-  // --- Pattern helpers ---
+  // --- Pattern helpers (popup/patterns.js) ---
 
-  function normalizeInput(input) {
-    let val = input.trim();
-    if (!val) return null;
-
-    // If already a full match pattern, return as-is
-    if (/^https?:\/\/.+\/\*$/.test(val)) {
-      // Force http only
-      return val.replace(/^https:/, 'http:');
-    }
-
-    // Strip protocol if provided
-    val = val.replace(/^https?:\/\//, '');
-    // Strip trailing slash
-    val = val.replace(/\/+$/, '');
-
-    if (!val) return null;
-
-    return `http://${val}/*`;
-  }
+  const { normalizeInput, urlMatchesAnyPattern } = window.DRPatterns;
 
   function isDefaultPattern(pattern) {
     return DEFAULT_PATTERNS.includes(pattern);
-  }
-
-  function urlMatchesPattern(url, pattern) {
-    // Convert match pattern to regex: http://host:port/* -> ^http://host:port/.*$
-    const escaped = pattern
-      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*');
-    try {
-      return new RegExp('^' + escaped + '$').test(url);
-    } catch {
-      return false;
-    }
-  }
-
-  function urlMatchesAnyPattern(url, patterns) {
-    return patterns.some(p => urlMatchesPattern(url, p));
   }
 
   // --- Allowed Sites rendering ---
@@ -194,7 +160,7 @@ Instructions:
     const pattern = normalizeInput(addSiteInput.value);
 
     if (!pattern) {
-      showError('Enter a host like 192.168.1.50:3000');
+      showError('Enter a host like staging.example.com or 192.168.1.50:3000');
       return;
     }
 
@@ -208,7 +174,7 @@ Instructions:
     try {
       granted = await chrome.permissions.request({ origins: [pattern] });
     } catch (err) {
-      showError('Invalid pattern. Try: host:port or http://host/*');
+      showError('Invalid pattern. Try: host, host:port or https://host/*');
       return;
     }
 

@@ -1,0 +1,3 @@
+.DS_Store
+# Store packages are built with: git archive --format=zip -o dom-review-<version>.zip HEAD manifest.json background content popup icons
+*.zip

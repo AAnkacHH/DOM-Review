@@ -18,5 +18,5 @@ DOM Review comes with a Sidebar Panel where you can manage all your reviews, fil
 Say goodbye to copy-pasting selectors and losing context. Let your AI agent read the DOM directly!
 
 Source Code & Contributions:
-The source code for DOM Review is open source and publicly available on [GitHub](https://github.com/AAnkacHH/web-review-extention).
+The source code for DOM Review is open source and publicly available on [GitHub](https://github.com/AAnkacHH/DOM-Review).
 

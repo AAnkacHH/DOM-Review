@@ -11,8 +11,33 @@ DOM Review is a Chrome extension that bridges the gap between what you *see* in 
 Built for the **vibecoding workflow**: you look at your app, point at what's off, describe the fix in plain English, and the AI reads your reviews straight from Chrome and makes the changes.
 
 ![Chrome Web Store](https://img.shields.io/badge/Manifest-V3-blue)
-![Version](https://img.shields.io/badge/version-1.1.0-green)
+![Version](https://img.shields.io/badge/version-1.2.0-green)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
+
+---
+
+## Project status (November 2026)
+
+I built DOM Review in February 2026, when describing a UI element to a coding agent in words was slow and the agent often changed the wrong thing. Two things have changed since:
+
+- **Models read screenshots well.** A screenshot and one sentence is usually enough for an agent to find the element in the code.
+- **Agents can drive a browser themselves.** They can open the page, inspect an element, read its styles and take their own screenshots.
+
+In my own work I now mostly send screenshots. Loading an extension, switching on select mode and filling in a form is more steps than taking a screenshot. I keep the extension working, but I am no longer sure the comment-thread workflow is worth its friction.
+
+What it still does that a screenshot cannot:
+
+- It tells the agent which component and file an element comes from. That matters for repeated components, elements without text, and spacing or size problems.
+- It keeps a list of review items the agent can answer and resolve one by one.
+
+Known limitations:
+
+- A review is tied to a CSS selector. When the markup changes, it can silently point at a different element or at nothing.
+- In single-page apps reviews do not follow client-side navigation: they stay attached to the URL the page was loaded with.
+- Review ids are based on the current millisecond, so an agent adding several comments in one call can create duplicates.
+- Reviews and the agent API live in the page itself (`localStorage`, `window.__domReviewAPI`), so any script on that page can read them.
+
+If I continue, the direction is probably a screenshot that knows what is on it: drag a region and get the image together with the selector, component, file and sizes of the elements under it. Whether that is worth building is an open question.
 
 ---
 
@@ -276,13 +301,17 @@ The popup includes ready-made prompts you can copy:
 
 ## Installation
 
+### From the Chrome Web Store
+
+Install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/noodbnpicpfgghpkcddjainbpngloeoh). The store version can lag behind this repository while an update is in review.
+
 ### From Source (Developer Mode)
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/AAnkacHH/web-review-extention.git
-   cd web-review-extention
+   git clone https://github.com/AAnkacHH/DOM-Review.git
+   cd DOM-Review
    ```
 
 2. Open Chrome and go to `chrome://extensions/`
@@ -301,7 +330,7 @@ The popup includes ready-made prompts you can copy:
 | `storage`                   | Persist reviews and settings     |
 | `scripting`                 | Inject content scripts dynamically |
 | `localhost` / `127.0.0.1`   | Default dev server origins       |
-| `http://*/*` (optional)     | User-added custom dev sites      |
+| `http://*/*`, `https://*/*` (optional) | User-added custom sites; requested per site |
 
 > By default the extension only runs on localhost. Custom sites require explicit user approval via Chrome's permission prompt.
 
@@ -425,7 +454,7 @@ Claude Code will read the reviews, fix the code, reply with what was changed, an
 
 ## Custom Domains
 
-By default DOM Review runs on `http://localhost/*` and `http://127.0.0.1/*`. You can add custom dev sites (LAN IPs, local domains, remote dev servers) from the popup.
+By default DOM Review runs on `http://localhost/*` and `http://127.0.0.1/*`. You can add any other site (LAN IPs, local domains, staging and remote dev servers, HTTP or HTTPS) from the popup.
 
 ### Adding a Site
 
@@ -437,11 +466,15 @@ By default DOM Review runs on `http://localhost/*` and `http://127.0.0.1/*`. You
 
 The input accepts flexible formats:
 
-| You type | Saved as |
-| --- | --- |
-| `192.168.1.50:3000` | `http://192.168.1.50:3000/*` |
-| `http://myapp.local:5173/` | `http://myapp.local:5173/*` |
-| `http://dev.example.com/*` | `http://dev.example.com/*` |
+| You type | Saved as | Matches |
+| --- | --- | --- |
+| `staging.example.com` | `*://staging.example.com/*` | HTTP and HTTPS, any port |
+| `192.168.1.50:3000` | `*://192.168.1.50:3000/*` | HTTP and HTTPS, port 3000 |
+| `https://app.example.com/admin` | `https://app.example.com/*` | HTTPS only; the path is dropped |
+| `http://myapp.local:5173/` | `http://myapp.local:5173/*` | HTTP only, port 5173 |
+| `*.example.com` | `*://*.example.com/*` | the domain and all its subdomains |
+
+Without a scheme the site is added for both HTTP and HTTPS. A pattern without a port matches every port.
 
 ### Removing a Site
 
@@ -453,10 +486,11 @@ The toggle switch in the popup header enables or disables the extension globally
 
 ### Notes
 
-- Only HTTP origins are supported (this is a dev tool — HTTPS is not needed)
+- Reviews and the agent API live in the page itself (`localStorage`, `window.__domReviewAPI`), so every script on that page can read them. Add only sites you trust.
 - Default patterns (localhost, 127.0.0.1) cannot be removed
 - Each custom site triggers a separate Chrome permission prompt for transparency
-- Custom patterns are synced across devices via `chrome.storage.sync`
+- Custom sites are the host permissions you granted in this browser profile; they are not synced to other devices
+- You can also revoke a site in `chrome://extensions` → DOM Review → Details → Site access
 
 ## Vibecoding Workflow Tips
 

@@ -4,8 +4,8 @@
  * and dynamic content script registration for custom URL patterns.
  */
 
-const STORAGE_KEY = 'dr_custom_patterns';
 const ENABLED_KEY = 'dr_enabled';
+const DEFAULT_ORIGINS = ['http://localhost/*', 'http://127.0.0.1/*'];
 
 const MAIN_WORLD_SCRIPTS = ['content/modules/framework-bridge.js', 'content/modules/agent-api-bridge.js'];
 const ISOLATED_WORLD_SCRIPTS = [
@@ -24,16 +24,24 @@ const ISOLATED_WORLD_SCRIPTS = [
 ];
 const ISOLATED_WORLD_CSS = ['content/content-style.css'];
 
+// Custom sites are the host permissions the user granted, nothing is stored separately.
+// The popup closes as soon as Chrome shows its permission prompt, so it never got to save
+// the site itself: the permission was granted but the scripts were not registered.
 async function getCustomPatterns() {
-  const result = await chrome.storage.sync.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || [];
+  const granted = await chrome.permissions.getAll();
+  return (granted.origins || []).filter(origin => !DEFAULT_ORIGINS.includes(origin));
 }
 
-async function saveCustomPatterns(patterns) {
-  await chrome.storage.sync.set({ [STORAGE_KEY]: patterns });
+// A permission event and a popup message can arrive together; registering twice at once
+// fails with a duplicate id, so the runs go one after another.
+let registration = Promise.resolve();
+
+function registerDynamicScripts() {
+  registration = registration.then(replaceDynamicScripts, replaceDynamicScripts);
+  return registration;
 }
 
-async function registerDynamicScripts() {
+async function replaceDynamicScripts() {
   // Unregister existing dynamic scripts first
   try {
     await chrome.scripting.unregisterContentScripts({ ids: ['dr-custom-main', 'dr-custom-isolated'] });
@@ -69,6 +77,10 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // Also re-register on service worker startup (survives SW restarts)
 registerDynamicScripts();
+
+// Granting or revoking a site (popup prompt, chrome://extensions) changes where the scripts run
+chrome.permissions.onAdded.addListener(() => { registerDynamicScripts(); });
+chrome.permissions.onRemoved.addListener(() => { registerDynamicScripts(); });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_REVIEWS') {
@@ -124,36 +136,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // The popup asks for this after a permission was granted; onAdded usually got there first
   if (message.type === 'ADD_CUSTOM_PATTERN') {
     (async () => {
-      const pattern = message.pattern;
-      const patterns = await getCustomPatterns();
-      if (patterns.includes(pattern)) {
-        sendResponse({ success: false, error: 'Pattern already exists' });
-        return;
-      }
-      patterns.push(pattern);
-      await saveCustomPatterns(patterns);
       await registerDynamicScripts();
-      sendResponse({ success: true, patterns });
+      sendResponse({ success: true, patterns: await getCustomPatterns() });
     })();
     return true;
   }
 
   if (message.type === 'REMOVE_CUSTOM_PATTERN') {
     (async () => {
-      const pattern = message.pattern;
-      let patterns = await getCustomPatterns();
-      patterns = patterns.filter(p => p !== pattern);
-      await saveCustomPatterns(patterns);
-      await registerDynamicScripts();
-      // Revoke host permission
       try {
-        await chrome.permissions.remove({ origins: [pattern] });
+        await chrome.permissions.remove({ origins: [message.pattern] });
       } catch {
-        // Permission may not exist or can't be revoked — ignore
+        // Not an optional permission or already gone
       }
-      sendResponse({ success: true, patterns });
+      await registerDynamicScripts();
+      sendResponse({ success: true, patterns: await getCustomPatterns() });
     })();
     return true;
   }
